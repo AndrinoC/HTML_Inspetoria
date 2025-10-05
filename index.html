@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Inspetores v15 (Com Persistência de Dados)</title>
+    <style>
+        :root {
+            --background-color: #2c2f33;
+            --section-color: #36393f;
+            --border-color: #40444b;
+            --text-color: #dcddde;
+            --header-color: #ffffff;
+            --accent-color: #0096FF;
+            --star-featured-color: #FFD700;
+            --warned-color: #FFA500; /* Orange */
+            --promoted-color: #28a745; /* Green */
+            --demoted-color: #dc3545; /* Red */
+            --button-primary-bg: #007bff;
+            --button-secondary-bg: #6c757d;
+            --button-danger-bg: #dc3545;
+            --input-disabled-bg: #202225;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 20px; background-color: var(--background-color); color: var(--text-color);
+        }
+
+        .container { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; }
+        .section { background-color: var(--section-color); border: 1px solid var(--border-color); padding: 25px; border-radius: 8px; }
+        h1, h2 { border-bottom: 2px solid var(--accent-color); padding-bottom: 10px; color: var(--header-color); }
+        h1 { text-align: center; margin-bottom: 10px;}
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        input[type="text"], input[type="number"], select, textarea {
+            width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 4px;
+            border: 1px solid var(--border-color); background-color: var(--background-color);
+            color: var(--text-color); font-size: 14px; box-sizing: border-box;
+        }
+        input:disabled, textarea:disabled, select:disabled { background-color: var(--input-disabled-bg); cursor: not-allowed; opacity: 0.7; }
+        textarea { resize: vertical; min-height: 60px; }
+        button {
+            color: white; padding: 10px 15px; border: none; border-radius: 5px;
+            cursor: pointer; transition: opacity 0.3s; margin-right: 5px; font-weight: bold;
+        }
+        button:hover { opacity: 0.85; }
+        .btn-primary { background-color: var(--button-primary-bg); }
+        .btn-secondary { background-color: var(--button-secondary-bg); }
+        .btn-danger { background-color: var(--button-danger-bg); }
+        .controls-container { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; margin-bottom: 20px;}
+        .flex-group { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        #inspector-list, #role-list, #weekly-report-list { list-style-type: none; padding: 0; }
+        #inspector-list > li {
+            background-color: #40444B; margin-bottom: 10px; padding: 15px; border-radius: 5px;
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 15px;
+            transition: opacity 0.3s ease, background-color 0.3s ease;
+        }
+        #inspector-list > li[ondrop]:hover { background-color: #585e68; }
+        #role-list > li {
+            background-color: #40444B; margin-bottom: 10px; padding: 15px; border-radius: 5px;
+            display: flex; justify-content: space-between; align-items: center; gap: 15px;
+        }
+        #role-list > li[draggable="true"] { cursor: grab; }
+        #role-list > li[draggable="true"]:active { cursor: grabbing; }
+        #inspector-list > li.disabled-for-filter { opacity: 0.4; }
+        #inspector-list > li.disabled-for-filter .inspector-details { pointer-events: none; }
+        #weekly-report-list > li {
+            padding: 12px; border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        #weekly-report-list > li > label { cursor: pointer; }
+        #weekly-report-list > li > label:hover { color: var(--accent-color); }
+        #weekly-report-list > li:last-child { border-bottom: none; }
+        .inspector-header { display: flex; align-items: center; gap: 8px; }
+        .feature-star, .status-icon { font-size: 20px; cursor: pointer; color: #72767d; transition: color 0.2s; user-select: none;}
+        .feature-star.featured { color: var(--star-featured-color); }
+        .status-icon.warned { color: var(--warned-color); }
+        .status-icon.promoted { color: var(--promoted-color); }
+        .status-icon.demoted { color: var(--demoted-color); }
+        .inspector-details { margin-top: 10px; }
+        .list-item-content { flex-grow: 1; }
+        .report-controls { display: flex; align-items: center; gap: 10px; }
+        .temp-role-display { font-size: 0.8em; color: var(--accent-color); font-style: italic; margin-left: 10px;}
+        .role-tag {
+            background-color: var(--accent-color); color: white; padding: 3px 8px; border-radius: 4px; 
+            font-size: 0.9em; margin-right: 5px; margin-bottom: 5px; display: inline-flex; align-items: center; gap: 5px;
+        }
+        .remove-role-btn { cursor: pointer; font-weight: bold; font-size: 1.1em; line-height: 1; }
+        .remove-role-btn:hover { color: var(--button-danger-bg); }
+        
+        #report-history-section { 
+            position: relative; 
+            grid-column: 1 / -1;
+        }
+        #close-history-btn { position: absolute; top: 25px; right: 25px; padding: 5px 10px; }
+        #history-content { 
+            background-color: var(--background-color); border: 1px solid var(--border-color);
+            padding: 10px; border-radius: 5px; margin-top: 15px;
+            max-height: 400px; overflow-y: auto;
+        }
+        #history-content h3 { margin-top: 0; color: var(--accent-color); }
+        #history-content pre { 
+            white-space: pre-wrap; word-wrap: break-word; 
+            background-color: var(--section-color); padding: 10px; border-radius: 3px;
+            font-family: monospace;
+        }
+        .main-actions { text-align: center; margin-bottom: 30px; }
+        footer {
+            text-align: center; margin-top: 40px; padding-top: 20px;
+            border-top: 1px solid var(--border-color); color: #8e9297;
+        }
+        footer a { color: var(--accent-color); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <h1>Gerenciador de Inspetores</h1>
+
+    <div class="main-actions">
+        <button class="btn-primary" onclick="exportToDiscord()">Exportar Relatório para Discord</button>
+        <button class="btn-secondary" onclick="manualSave()">Salvar Dados (Backup)</button>
+        <button class="btn-secondary" onclick="manualLoad()">Carregar Dados (Backup)</button>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            <h2>Inspetores</h2>
+            <div class="flex-group">
+                <input type="number" id="inspector-id" placeholder="ID (0-9999999)" style="flex-grow: 1; margin-bottom: 0;">
+                <input type="text" id="inspector-name" placeholder="Nome do Inspetor" style="flex-grow: 2; margin-bottom: 0;">
+                <button class="btn-primary" onclick="addInspector()">Adicionar</button>
+            </div>
+            <div class="controls-container">
+                <div>
+                    <label for="sort-by">Ordenar por:</label>
+                    <select id="sort-by" onchange="handleSortChange()">
+                        <option value="name" selected>Nome</option>
+                        <option value="role">Função Primária</option>
+                        <option value="performance">Desempenho</option>
+                    </select>
+                </div>
+                <div id="role-filter-container" style="display: none;">
+                    <label for="role-sort-filter">Função (Ordenação):</label>
+                    <select id="role-sort-filter" onchange="sortInspectors()"></select>
+                </div>
+            </div>
+            <ul id="inspector-list"></ul>
+        </div>
+
+        <div class="section">
+            <h2>Gerenciar Funções</h2>
+            <div class="flex-group">
+                <input type="text" id="role-name" placeholder="Nome da Função" style="flex-grow: 1; margin-bottom: 0;">
+                <button class="btn-primary" onclick="addRole()">Adicionar</button>
+            </div>
+             <div class="flex-group">
+                <input type="checkbox" id="role-quantitative" style="width: auto; margin:0;">
+                <label for="role-quantitative" style="margin-bottom: 0; font-weight: normal;">Quantitativa</label>
+            </div>
+            <ul id="role-list"></ul>
+        </div>
+
+        <div class="section calendar-section">
+            <h2>Calendário de Relatórios</h2>
+            <div class="calendar-controls">
+                <button class="btn-secondary" onclick="previousWeek()">Semana Anterior</button>
+                <span id="current-week"></span>
+                <button class="btn-secondary" onclick="nextWeek()">Próxima Semana</button>
+            </div>
+            <ul id="weekly-report-list"></ul>
+        </div>
+
+        <div id="report-history-section" class="section" style="display: none;">
+            <h2 id="history-title">Histórico de Relatórios</h2>
+            <button id="close-history-btn" class="btn-danger" onclick="closeReportHistory()">Fechar</button>
+            <div id="history-content"></div>
+        </div>
+    </div>
+    
+    <footer>
+        © - Desenvolvido por <a href="https://github.com/AndrinoC" target="_blank">AndrinoC</a>
+    </footer>
+
+    <script>
+        let inspectors = [];
+        let roles = [];
+        let currentWeek = new Date();
+
+        const defaultRoles = [
+            { name: 'Fiscal de atestados', quantitative: false },
+            { name: 'Fiscal de prisão', quantitative: false },
+            { name: 'Instrutor de cursos', quantitative: true },
+            { name: 'Fiscal de conduta', quantitative: false },
+            { name: 'Auxiliar de prisão', quantitative: false },
+            { name: 'Recrutador', quantitative: true }
+        ];
+
+        // --- Data Persistence ---
+        function saveData() {
+            const dataToSave = {
+                inspectors,
+                roles
+            };
+            localStorage.setItem('inspectorManagerData', JSON.stringify(dataToSave));
+        }
+
+        function loadData() {
+            const savedData = localStorage.getItem('inspectorManagerData');
+            if (savedData) {
+                const parsedData = JSON.parse(savedData);
+                inspectors = parsedData.inspectors || [];
+                roles = parsedData.roles || defaultRoles;
+            } else {
+                roles = defaultRoles;
+            }
+        }
+
+        function manualSave() {
+            const dataToSave = { inspectors, roles };
+            const jsonString = JSON.stringify(dataToSave, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'inspetores-backup.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function manualLoad() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = readerEvent => {
+                    try {
+                        const content = readerEvent.target.result;
+                        const loadedData = JSON.parse(content);
+                        if (loadedData.inspectors && loadedData.roles) {
+                            inspectors = loadedData.inspectors;
+                            roles = loadedData.roles;
+                            renderAll();
+                            alert('Dados carregados com sucesso!');
+                        } else {
+                            alert('Arquivo de backup inválido.');
+                        }
+                    } catch (error) {
+                        alert('Erro ao ler ou processar o arquivo de backup.');
+                        console.error(error);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function allowDrop(ev) { ev.preventDefault(); }
+        function drag(ev, roleName) { ev.dataTransfer.setData("text/plain", roleName); }
+        function drop(ev) {
+            ev.preventDefault();
+            const roleName = ev.dataTransfer.getData("text/plain");
+            const inspectorId = ev.currentTarget.dataset.inspectorId;
+            if (roleName && inspectorId) {
+                assignRoleToInspector(parseInt(inspectorId), roleName);
+            }
+        }
+
+        function addInspector() {
+            const nameInput = document.getElementById('inspector-name'), idInput = document.getElementById('inspector-id');
+            const name = nameInput.value.trim(), inspectorId = parseInt(idInput.value, 10);
+            if (!name || isNaN(inspectorId)) { alert("Nome e ID são obrigatórios e o ID deve ser um número."); return; }
+            if (inspectorId < 0 || inspectorId > 9999999) { alert("O ID deve ser um número inteiro entre 0 e 9.999.999."); return; }
+            if (inspectors.some(insp => insp.inspectorId === inspectorId)) { alert("Este ID já está em uso por outro inspetor."); return; }
+            const defaultInspectorRoles = ['Fiscal de conduta', 'Auxiliar de prisão', 'Recrutador'];
+            const initialRoleData = {};
+            defaultInspectorRoles.forEach(roleName => {
+                initialRoleData[roleName] = { performance: 0, notes: '', quantity: 0 };
+            });
+            inspectors.push({
+                id: Date.now(), inspectorId, name, roles: defaultInspectorRoles, status: null, isFeatured: false, activeRoleForEditing: defaultInspectorRoles[0], roleData: initialRoleData, reports: {},
+            });
+            nameInput.value = ''; idInput.value = '';
+            renderAll();
+        }
+
+        function removeInspector(id) {
+            if (confirm('Tem certeza que deseja remover este inspetor?')) {
+                inspectors = inspectors.filter(inspector => inspector.id !== id);
+                renderAll();
+            }
+        }
+        
+        function updateInspectorRoleData(id, field, element) {
+            const inspector = inspectors.find(insp => insp.id === id);
+            if (!inspector) return;
+            const roleKey = inspector.activeRoleForEditing;
+            if (!roleKey) return; 
+            if (!inspector.roleData[roleKey]) inspector.roleData[roleKey] = { performance: 0, notes: '', quantity: 0 };
+            
+            let value = element.value, numValue = parseInt(value, 10);
+            if (field === 'performance' || field === 'quantity') {
+                if (isNaN(numValue) || value === '') numValue = 0;
+                if (field === 'performance') { if (numValue < 0) numValue = 0; if (numValue > 10) numValue = 10; } 
+                else { if (numValue < 0) numValue = 0; }
+                inspector.roleData[roleKey][field] = numValue;
+                if (String(numValue) !== value) element.value = numValue;
+            } else { inspector.roleData[roleKey].notes = value; }
+            saveData();
+        }
+        
+        function sortInspectors() {
+            const sortBy = document.getElementById('sort-by').value;
+            const roleSortFilter = document.getElementById('role-sort-filter').value;
+            inspectors.sort((a, b) => {
+                if (sortBy === 'name') return a.name.localeCompare(b.name);
+                const aPrimaryRole = a.roles[0], bPrimaryRole = b.roles[0];
+                if (!aPrimaryRole) return 1; if (!bPrimaryRole) return -1;
+
+                let perfA, perfB;
+                if (sortBy === 'performance') {
+                    if (roleSortFilter === 'all') {
+                        perfA = a.roleData[aPrimaryRole]?.performance ?? -1;
+                        perfB = b.roleData[bPrimaryRole]?.performance ?? -1;
+                    } else {
+                        perfA = a.roleData[roleSortFilter]?.performance ?? -1;
+                        perfB = b.roleData[roleSortFilter]?.performance ?? -1;
+                    }
+                } else { // Sort by Role
+                    if (aPrimaryRole < bPrimaryRole) return -1; if (aPrimaryRole > bPrimaryRole) return 1;
+                    perfA = a.roleData[aPrimaryRole]?.performance ?? -1;
+                    perfB = b.roleData[bPrimaryRole]?.performance ?? -1;
+                }
+                return perfB - perfA;
+            });
+            renderInspectors();
+        }
+
+        function setActiveRoleForEditing(inspectorId, roleName) {
+            const inspector = inspectors.find(insp => insp.id === inspectorId);
+            if (inspector) {
+                inspector.activeRoleForEditing = roleName;
+                renderInspectors();
+                saveData();
+            }
+        }
+
+        function renderInspectors() {
+            const inspectorList = document.getElementById('inspector-list');
+            inspectorList.innerHTML = '';
+            const sortBy = document.getElementById('sort-by').value;
+            const roleSortFilter = document.getElementById('role-sort-filter').value;
+            const isTemporaryView = sortBy === 'performance' && roleSortFilter !== 'all';
+            inspectors.forEach(inspector => {
+                const li = document.createElement('li');
+                li.dataset.inspectorId = inspector.id;
+                li.ondrop = drop; li.ondragover = allowDrop;
+                const roleForDataDisplay = isTemporaryView ? roleSortFilter : inspector.activeRoleForEditing;
+                const roleObjectForData = roles.find(r => r.name === roleForDataDisplay) || { quantitative: false };
+                let liClasses = '';
+                if (isTemporaryView && !inspector.roleData[roleForDataDisplay]) liClasses += ' disabled-for-filter';
+                li.className = liClasses;
+                const starClass = inspector.isFeatured ? 'featured' : '';
+                const tempRoleDisplayHTML = isTemporaryView ? `<span class="temp-role-display">(Visualizando Desempenho de: ${roleForDataDisplay})</span>` : '';
+                let detailsHTML = '', editRoleDropdownHTML = '';
+                if (inspector.roles.length > 0) {
+                    const editOptions = inspector.roles.map(r => `<option value="${r}" ${inspector.activeRoleForEditing === r ? 'selected' : ''}>${r}</option>`).join('');
+                    editRoleDropdownHTML = `<label>Editar Dados da Função:</label><select onchange="setActiveRoleForEditing(${inspector.id}, this.value)" ${isTemporaryView ? 'disabled' : ''}>${editOptions}</select>`;
+                    if (roleForDataDisplay) {
+                        const currentRoleData = inspector.roleData[roleForDataDisplay] || { performance: 0, notes: '', quantity: 0 };
+                        let quantitativeInputHTML = '';
+                        if (roleObjectForData.quantitative) {
+                            quantitativeInputHTML = `<label>Quantidade:</label><input type="number" min="0" value="${currentRoleData.quantity}" oninput="updateInspectorRoleData(${inspector.id}, 'quantity', this)">`;
+                        }
+                        detailsHTML = `<label>Desempenho:</label><input type="number" min="0" max="10" value="${currentRoleData.performance}" oninput="updateInspectorRoleData(${inspector.id}, 'performance', this)">
+                                     ${quantitativeInputHTML}<label>Anotações:</label><textarea oninput="updateInspectorRoleData(${inspector.id}, 'notes', this)">${currentRoleData.notes}</textarea>`;
+                    }
+                }
+                const rolesHTML = inspector.roles.map(role => `<span class="role-tag">${role} <span class="remove-role-btn" onclick="removeRoleFromInspector(${inspector.id}, '${role}')" title="Remover função">×</span></span>`).join('');
+                li.innerHTML = `<div class="list-item-content"><div class="inspector-header">
+                             <span class="feature-star ${starClass}" onclick="toggleFeatured(${inspector.id})" title="Marcar como Destaque">★</span>
+                             <span class="status-icon ${inspector.status === 'warned' ? 'warned' : ''}" onclick="setInspectorStatus(${inspector.id}, 'warned')" title="Advertência">⚠️</span>
+                             <span class="status-icon ${inspector.status === 'promoted' ? 'promoted' : ''}" onclick="setInspectorStatus(${inspector.id}, 'promoted')" title="Promovido">⬆️</span>
+                             <span class="status-icon ${inspector.status === 'demoted' ? 'demoted' : ''}" onclick="setInspectorStatus(${inspector.id}, 'demoted')" title="Rebaixado">⬇️</span>
+                             <strong>#${inspector.inspectorId} - ${inspector.name}</strong>${tempRoleDisplayHTML}</div>
+                        <div class="inspector-details"><div style="margin-bottom: 10px;"><strong>Funções:</strong> ${rolesHTML || 'Nenhuma (Arraste uma função aqui)'}</div>${editRoleDropdownHTML}${detailsHTML}</div></div>
+                    <button class="btn-danger" onclick="removeInspector(${inspector.id})">Remover</button>`;
+                inspectorList.appendChild(li);
+            });
+        }
+        
+        function setInspectorStatus(id, status) {
+            const inspector = inspectors.find(insp => insp.id === id);
+            if (!inspector) return;
+            inspector.status = inspector.status === status ? null : status;
+            renderAll();
+        }
+
+        function toggleFeatured(id) {
+            const inspectorToToggle = inspectors.find(insp => insp.id === id);
+            if (!inspectorToToggle) return;
+            const isCurrentlyFeatured = inspectorToToggle.isFeatured;
+            inspectors.forEach(insp => insp.isFeatured = false);
+            inspectorToToggle.isFeatured = !isCurrentlyFeatured;
+            renderAll();
+        }
+
+        function assignRoleToInspector(id, newRoleName) {
+            const inspector = inspectors.find(insp => insp.id === id);
+            if (!inspector || inspector.roles.includes(newRoleName)) return;
+            inspector.roles.push(newRoleName);
+            inspector.activeRoleForEditing = newRoleName;
+            if (!inspector.roleData[newRoleName]) {
+                inspector.roleData[newRoleName] = { performance: 0, notes: '', quantity: 0 };
+            }
+            renderAll();
+        }
+
+        function removeRoleFromInspector(id, roleNameToRemove) {
+            const inspector = inspectors.find(insp => insp.id === id);
+            if (!inspector) return;
+            inspector.roles = inspector.roles.filter(r => r !== roleNameToRemove);
+            if (inspector.activeRoleForEditing === roleNameToRemove) {
+                inspector.activeRoleForEditing = inspector.roles[0] || null;
+            }
+            renderAll();
+        }
+
+        function handleSortChange() {
+            const sortBy = document.getElementById('sort-by').value;
+            const roleFilterContainer = document.getElementById('role-filter-container');
+            if (sortBy === 'performance') {
+                roleFilterContainer.style.display = 'block';
+                document.getElementById('role-sort-filter').value = 'all';
+            } else {
+                roleFilterContainer.style.display = 'none';
+            }
+            sortInspectors();
+        }
+        
+        function addRole() {
+            const roleNameInput = document.getElementById('role-name'), roleName = roleNameInput.value.trim();
+            const isQuantitative = document.getElementById('role-quantitative').checked;
+            if (roleName && !roles.some(r => r.name === roleName)) {
+                roles.push({ name: roleName, quantitative: isQuantitative });
+                roleNameInput.value = ''; document.getElementById('role-quantitative').checked = false;
+                renderAll();
+            }
+        }
+
+        function removeRole(roleNameToRemove) {
+            if(confirm(`Tem certeza que deseja remover a função "${roleNameToRemove}" de todos os inspetores?`)){
+                roles = roles.filter(role => role.name !== roleNameToRemove);
+                inspectors.forEach(inspector => {
+                    removeRoleFromInspector(inspector.id, roleNameToRemove);
+                });
+                renderAll();
+            }
+        }
+        
+        function renderRoles() {
+            const roleList = document.getElementById('role-list'), roleSortFilter = document.getElementById('role-sort-filter');
+            const currentSortVal = roleSortFilter.value;
+            roleList.innerHTML = ''; roleSortFilter.innerHTML = '<option value="all">Todas as Funções</option>';
+            // Filter to not show inspector default roles in the draggable list
+            const draggableRoles = roles.filter(r => !['Fiscal de conduta', 'Auxiliar de prisão', 'Recrutador'].includes(r.name));
+            draggableRoles.forEach(role => {
+                const li = document.createElement('li'), quantText = role.quantitative ? ' (Quantitativa)' : '';
+                li.innerHTML = `<span class="list-item-content">${role.name}<em>${quantText}</em></span>`;
+                li.draggable = true; li.ondragstart = (e) => drag(e, role.name);
+                li.innerHTML += `<button class="btn-danger" onclick="removeRole('${role.name}')">Remover</button>`;
+                roleList.appendChild(li);
+            });
+            roles.forEach(role => {
+                const option = document.createElement('option');
+                option.value = role.name; option.textContent = role.name;
+                roleSortFilter.appendChild(option);
+            });
+            roleSortFilter.value = currentSortVal;
+        }
+        
+        function getWeekIdentifier(date) {
+            const startOfWeek = new Date(date);
+            startOfWeek.setHours(0,0,0,0);
+            startOfWeek.setDate(date.getDate() - date.getDay() + (date.getDay() === 0 ? -6:1) );
+            const year = startOfWeek.getFullYear(), firstDayOfYear = new Date(year, 0, 1);
+            const pastDaysOfYear = (startOfWeek - firstDayOfYear) / 86400000;
+            return `${year}-W${String(Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7)).padStart(2, '0')}`;
+        }
+
+        function handleReportCheck(checkbox, inspectorId, weekIdentifier) {
+            const inspector = inspectors.find(insp => insp.id === inspectorId);
+            if (!inspector) return;
+            if (checkbox.checked) {
+                const reportContent = prompt("Cole aqui o relatório:", inspector.reports[weekIdentifier]?.content || "");
+                if (reportContent !== null && reportContent.trim() !== "") {
+                    inspector.reports[weekIdentifier] = { delivered: true, content: reportContent };
+                } else { checkbox.checked = false; }
+            } else { delete inspector.reports[weekIdentifier]; }
+            renderCalendar();
+            saveData();
+        }
+        
+        function showReportHistory(inspectorId) {
+            const inspector = inspectors.find(insp => insp.id === inspectorId);
+            if (!inspector) return;
+            const historyPanel = document.getElementById('report-history-section'), historyTitle = document.getElementById('history-title'), historyContent = document.getElementById('history-content');
+            historyTitle.textContent = `Histórico de Relatórios de #${inspector.inspectorId} - ${inspector.name}`;
+            historyContent.innerHTML = '';
+            const reportKeys = Object.keys(inspector.reports);
+            if (reportKeys.length === 0) {
+                historyContent.innerHTML = '<p>Nenhum relatório encontrado para este inspetor.</p>';
+            } else {
+                reportKeys.sort().reverse().forEach(weekIdentifier => {
+                    const reportEntry = document.createElement('div');
+                    reportEntry.innerHTML = `<h3>Semana: ${weekIdentifier}</h3><pre>${inspector.reports[weekIdentifier].content}</pre>`;
+                    historyContent.appendChild(reportEntry);
+                });
+            }
+            historyPanel.style.display = 'block';
+        }
+
+        function closeReportHistory() {
+            document.getElementById('report-history-section').style.display = 'none';
+        }
+
+        function renderCalendar() {
+            const reportList = document.getElementById('weekly-report-list'), currentWeekSpan = document.getElementById('current-week');
+            reportList.innerHTML = '';
+            const startOfWeek = new Date(currentWeek);
+            startOfWeek.setDate(currentWeek.getDate() - currentWeek.getDay() + (currentWeek.getDay() === 0 ? -6:1));
+            const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
+            currentWeekSpan.textContent = `Semana de ${startOfWeek.toLocaleDateString()} a ${endOfWeek.toLocaleDateString()}`;
+            const weekIdentifier = getWeekIdentifier(currentWeek);
+            if (inspectors.length === 0) { reportList.innerHTML = '<li>Adicione inspetores para ver a lista de relatórios.</li>'; return; }
+            inspectors.forEach(inspector => {
+                const li = document.createElement('li'), reportData = inspector.reports[weekIdentifier];
+                let statusIndicator = '', statusTitle = '';
+                if (inspector.status) {
+                    switch (inspector.status) {
+                        case 'warned': statusIndicator = ' ⚠️'; statusTitle = 'Status: Advertência'; break;
+                        case 'promoted': statusIndicator = ' ⬆️'; statusTitle = 'Status: Promovido'; break;
+                        case 'demoted': statusIndicator = ' ⬇️'; statusTitle = 'Status: Rebaixado'; break;
+                    }
+                }
+                li.innerHTML = `<label style="margin:0;" onclick="showReportHistory(${inspector.id})" title="Clique para ver o histórico. ${statusTitle}">${inspector.name}${statusIndicator}</label>`;
+                const controlsDiv = document.createElement('div');
+                controlsDiv.className = 'report-controls';
+                if (Object.keys(inspector.reports).length > 0) {
+                    controlsDiv.innerHTML += `<button class="btn-secondary" onclick="showReportHistory(${inspector.id})">Histórico</button>`;
+                }
+                controlsDiv.innerHTML += `<input type="checkbox" ${reportData ? 'checked' : ''} onchange="handleReportCheck(this, ${inspector.id}, '${weekIdentifier}')" style="height: 20px; width: 20px; margin: 0;">`;
+                li.appendChild(controlsDiv); reportList.appendChild(li);
+            });
+        }
+
+        function previousWeek() { currentWeek.setDate(currentWeek.getDate() - 7); renderCalendar(); }
+        function nextWeek() { currentWeek.setDate(currentWeek.getDate() + 7); renderCalendar(); }
+        
+        function exportToDiscord() {
+            const weekIdentifier = getWeekIdentifier(currentWeek);
+            let discordMessage = `**__Relatório de Inspetores - ${weekIdentifier}__**\n\n`;
+            if (inspectors.length === 0) { discordMessage = "Nenhum inspetor cadastrado."; }
+            else {
+                inspectors.forEach(inspector => {
+                    const primaryRoleName = inspector.roles[0];
+                    const roleObject = roles.find(r => r.name === primaryRoleName);
+                    const primaryRoleData = inspector.roleData[primaryRoleName] || { performance: 0, notes: '', quantity: 0 };
+                    let displayName = `**#${inspector.inspectorId} - ${inspector.name}**`;
+                    if (inspector.isFeatured) { displayName += " ⭐ **(Destaque)**"; }
+                    discordMessage += `${displayName}\n`;
+                    if (inspector.status) {
+                        let statusText = '';
+                        switch (inspector.status) {
+                            case 'warned': statusText = '⚠️ Advertência'; break;
+                            case 'promoted': statusText = '⬆️ Promovido'; break;
+                            case 'demoted': statusText = '⬇️ Rebaixado'; break;
+                        }
+                        discordMessage += `> **Status:** ${statusText}\n`;
+                    }
+                    discordMessage += `> **Funções:** ${inspector.roles.join(', ') || 'Nenhuma'}\n`;
+                    if(primaryRoleName) {
+                        discordMessage += `> **Desempenho (Primário):** ${primaryRoleData.performance}/10\n`;
+                        if (roleObject?.quantitative) {
+                            discordMessage += `> **Quantidade (Primário):** ${primaryRoleData.quantity}\n`;
+                        }
+                    }
+                    const reportStatus = inspector.reports[weekIdentifier] ? '✅ Entregue' : '❌ Pendente';
+                    discordMessage += `> **Relatório da Semana:** ${reportStatus}\n`;
+                    if (primaryRoleData.notes && primaryRoleName) {
+                         discordMessage += `> **Anotações (Primário):** ${primaryRoleData.notes}\n`;
+                    }
+                    discordMessage += '\n';
+                });
+            }
+            navigator.clipboard.writeText(discordMessage).then(() => alert('Mensagem formatada para o Discord copiada!'), () => alert('Falha ao copiar a mensagem.'));
+        }
+
+        function renderAll() {
+            renderRoles(); 
+            handleSortChange(); 
+            renderCalendar();
+            saveData();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { 
+            loadData();
+            renderAll(); 
+        });
+    </script>
+</body>
+</html>
