@@ -354,16 +354,28 @@
                 const li = document.createElement('li');
                 li.dataset.inspectorId = inspector.id;
                 li.ondrop = drop; li.ondragover = allowDrop;
+
+                const editableRoles = inspector.roles.filter(roleName => roles.find(r => r.name === roleName)?.isEditable);
+                
+                // Self-correction logic
+                if (editableRoles.length > 0 && !editableRoles.includes(inspector.activeRoleForEditing)) {
+                    inspector.activeRoleForEditing = editableRoles[0];
+                } else if (editableRoles.length === 0) {
+                    inspector.activeRoleForEditing = null;
+                }
+                
                 const roleForEditing = inspector.activeRoleForEditing;
                 const roleForDataDisplay = isTemporaryView ? roleSortFilter : roleForEditing;
                 const roleObjectForData = roles.find(r => r.name === roleForDataDisplay);
+                
                 let liClasses = '';
                 if (isTemporaryView && !inspector.roleData[roleForDataDisplay]) liClasses += ' disabled-for-filter';
                 li.className = liClasses;
+                
                 const starClass = inspector.isFeatured ? 'featured' : '';
                 const tempRoleDisplayHTML = isTemporaryView ? `<span class="temp-role-display">(Visualizando Desempenho de: ${roleForDataDisplay})</span>` : '';
                 let detailsHTML = '', editRoleDropdownHTML = '';
-                const editableRoles = inspector.roles.filter(roleName => roles.find(r => r.name === roleName)?.isEditable);
+                
                 if (editableRoles.length > 0) {
                     const editOptions = editableRoles.map(r => `<option value="${r}" ${roleForEditing === r ? 'selected' : ''}>${r}</option>`).join('');
                     editRoleDropdownHTML = `<label>Editar Dados da Função:</label><select onchange="setActiveRoleForEditing(${inspector.id}, this.value)" ${isTemporaryView ? 'disabled' : ''}>${editOptions}</select>`;
@@ -377,6 +389,7 @@
                                      ${quantitativeInputHTML}<label>Anotações:</label><textarea oninput="updateInspectorRoleData(${inspector.id}, 'notes', this)">${currentRoleData.notes}</textarea>`;
                     }
                 }
+                
                 const rolesHTML = inspector.roles.map(role => `<span class="role-tag">${role} <span class="remove-role-btn" onclick="removeRoleFromInspector(${inspector.id}, '${role}')" title="Remover função">×</span></span>`).join('');
                 li.innerHTML = `<div class="list-item-content"><div class="inspector-header">
                              <span class="feature-star ${starClass}" onclick="toggleFeatured(${inspector.id})" title="Marcar como Destaque">★</span>
@@ -568,7 +581,8 @@
             if (inspectors.length === 0) { discordMessage = "Nenhum inspetor cadastrado."; }
             else {
                 inspectors.forEach(inspector => {
-                    const primaryRoleName = inspector.roles.filter(r => roles.find(ro => ro.name === r)?.isEditable)[0] || inspector.roles[0];
+                    const editableRoles = inspector.roles.filter(r => roles.find(ro => ro.name === r)?.isEditable);
+                    const primaryRoleName = editableRoles[0] || inspector.roles[0];
                     const primaryRoleObject = roles.find(r => r.name === primaryRoleName);
                     let displayName = `**#${inspector.inspectorId} - ${inspector.name}**`;
                     if (inspector.isFeatured) { displayName += " ⭐ **(Destaque)**"; }
@@ -585,12 +599,12 @@
                     discordMessage += `> **Funções:** ${inspector.roles.join(', ') || 'Nenhuma'}\n`;
                     if(primaryRoleName && primaryRoleObject?.isEditable) {
                         const primaryRoleData = inspector.roleData[primaryRoleName] || { performance: 0, notes: '', quantity: 0 };
-                        discordMessage += `> **Desempenho (Primário):** ${primaryRoleData.performance}/10\n`;
+                        discordMessage += `> **Desempenho (Função Editável Primária):** ${primaryRoleData.performance}/10\n`;
                         if (primaryRoleObject?.quantitative) {
-                            discordMessage += `> **Quantidade (Primário):** ${primaryRoleData.quantity}\n`;
+                            discordMessage += `> **Quantidade (Função Editável Primária):** ${primaryRoleData.quantity}\n`;
                         }
                         if (primaryRoleData.notes) {
-                            discordMessage += `> **Anotações (Primário):** ${primaryRoleData.notes}\n`;
+                            discordMessage += `> **Anotações (Função Editável Primária):** ${primaryRoleData.notes}\n`;
                         }
                     }
                     const reportStatus = inspector.reports[weekIdentifier] ? '✅ Entregue' : '❌ Pendente';
