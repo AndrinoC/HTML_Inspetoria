@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Inspetores v15 (Com Persistência de Dados)</title>
+    <title>Gerenciador de Inspetores v15 (Funções Simplificadas)</title>
     <style>
         :root {
             --background-color: #2c2f33;
@@ -189,20 +189,20 @@
         let currentWeek = new Date();
 
         const defaultRoles = [
+            // Funções base para arrastar
             { name: 'Fiscal de atestados', quantitative: false },
             { name: 'Fiscal de prisão', quantitative: false },
             { name: 'Instrutor de cursos', quantitative: true },
-            { name: 'Fiscal de conduta', quantitative: false },
-            { name: 'Auxiliar de prisão', quantitative: false },
-            { name: 'Recrutador', quantitative: true }
+            
+            // Funções padrão dos inspetores (sem campos de dados)
+            { name: 'Fiscal de conduta', quantitative: false, hasDataFields: false },
+            { name: 'Auxiliar de prisão', quantitative: false, hasDataFields: false },
+            { name: 'Recrutador', quantitative: true, hasDataFields: false }
         ];
 
         // --- Data Persistence ---
         function saveData() {
-            const dataToSave = {
-                inspectors,
-                roles
-            };
+            const dataToSave = { inspectors, roles };
             localStorage.setItem('inspectorManagerData', JSON.stringify(dataToSave));
         }
 
@@ -303,7 +303,6 @@
             const roleKey = inspector.activeRoleForEditing;
             if (!roleKey) return; 
             if (!inspector.roleData[roleKey]) inspector.roleData[roleKey] = { performance: 0, notes: '', quantity: 0 };
-            
             let value = element.value, numValue = parseInt(value, 10);
             if (field === 'performance' || field === 'quantity') {
                 if (isNaN(numValue) || value === '') numValue = 0;
@@ -322,7 +321,6 @@
                 if (sortBy === 'name') return a.name.localeCompare(b.name);
                 const aPrimaryRole = a.roles[0], bPrimaryRole = b.roles[0];
                 if (!aPrimaryRole) return 1; if (!bPrimaryRole) return -1;
-
                 let perfA, perfB;
                 if (sortBy === 'performance') {
                     if (roleSortFilter === 'all') {
@@ -332,7 +330,7 @@
                         perfA = a.roleData[roleSortFilter]?.performance ?? -1;
                         perfB = b.roleData[roleSortFilter]?.performance ?? -1;
                     }
-                } else { // Sort by Role
+                } else {
                     if (aPrimaryRole < bPrimaryRole) return -1; if (aPrimaryRole > bPrimaryRole) return 1;
                     perfA = a.roleData[aPrimaryRole]?.performance ?? -1;
                     perfB = b.roleData[bPrimaryRole]?.performance ?? -1;
@@ -361,8 +359,9 @@
                 const li = document.createElement('li');
                 li.dataset.inspectorId = inspector.id;
                 li.ondrop = drop; li.ondragover = allowDrop;
-                const roleForDataDisplay = isTemporaryView ? roleSortFilter : inspector.activeRoleForEditing;
-                const roleObjectForData = roles.find(r => r.name === roleForDataDisplay) || { quantitative: false };
+                const roleForEditing = inspector.activeRoleForEditing;
+                const roleForDataDisplay = isTemporaryView ? roleSortFilter : roleForEditing;
+                const roleObjectForData = roles.find(r => r.name === roleForDataDisplay);
                 let liClasses = '';
                 if (isTemporaryView && !inspector.roleData[roleForDataDisplay]) liClasses += ' disabled-for-filter';
                 li.className = liClasses;
@@ -370,12 +369,12 @@
                 const tempRoleDisplayHTML = isTemporaryView ? `<span class="temp-role-display">(Visualizando Desempenho de: ${roleForDataDisplay})</span>` : '';
                 let detailsHTML = '', editRoleDropdownHTML = '';
                 if (inspector.roles.length > 0) {
-                    const editOptions = inspector.roles.map(r => `<option value="${r}" ${inspector.activeRoleForEditing === r ? 'selected' : ''}>${r}</option>`).join('');
+                    const editOptions = inspector.roles.map(r => `<option value="${r}" ${roleForEditing === r ? 'selected' : ''}>${r}</option>`).join('');
                     editRoleDropdownHTML = `<label>Editar Dados da Função:</label><select onchange="setActiveRoleForEditing(${inspector.id}, this.value)" ${isTemporaryView ? 'disabled' : ''}>${editOptions}</select>`;
-                    if (roleForDataDisplay) {
+                    if (roleForDataDisplay && roleObjectForData?.hasDataFields !== false) {
                         const currentRoleData = inspector.roleData[roleForDataDisplay] || { performance: 0, notes: '', quantity: 0 };
                         let quantitativeInputHTML = '';
-                        if (roleObjectForData.quantitative) {
+                        if (roleObjectForData?.quantitative) {
                             quantitativeInputHTML = `<label>Quantidade:</label><input type="number" min="0" value="${currentRoleData.quantity}" oninput="updateInspectorRoleData(${inspector.id}, 'quantity', this)">`;
                         }
                         detailsHTML = `<label>Desempenho:</label><input type="number" min="0" max="10" value="${currentRoleData.performance}" oninput="updateInspectorRoleData(${inspector.id}, 'performance', this)">
@@ -468,8 +467,9 @@
             const roleList = document.getElementById('role-list'), roleSortFilter = document.getElementById('role-sort-filter');
             const currentSortVal = roleSortFilter.value;
             roleList.innerHTML = ''; roleSortFilter.innerHTML = '<option value="all">Todas as Funções</option>';
-            // Filter to not show inspector default roles in the draggable list
-            const draggableRoles = roles.filter(r => !['Fiscal de conduta', 'Auxiliar de prisão', 'Recrutador'].includes(r.name));
+            const defaultInspectorRoleNames = ['Fiscal de conduta', 'Auxiliar de prisão', 'Recrutador'];
+            const draggableRoles = roles.filter(r => !defaultInspectorRoleNames.includes(r.name));
+            
             draggableRoles.forEach(role => {
                 const li = document.createElement('li'), quantText = role.quantitative ? ' (Quantitativa)' : '';
                 li.innerHTML = `<span class="list-item-content">${role.name}<em>${quantText}</em></span>`;
@@ -570,8 +570,7 @@
             else {
                 inspectors.forEach(inspector => {
                     const primaryRoleName = inspector.roles[0];
-                    const roleObject = roles.find(r => r.name === primaryRoleName);
-                    const primaryRoleData = inspector.roleData[primaryRoleName] || { performance: 0, notes: '', quantity: 0 };
+                    const primaryRoleObject = roles.find(r => r.name === primaryRoleName);
                     let displayName = `**#${inspector.inspectorId} - ${inspector.name}**`;
                     if (inspector.isFeatured) { displayName += " ⭐ **(Destaque)**"; }
                     discordMessage += `${displayName}\n`;
@@ -585,17 +584,18 @@
                         discordMessage += `> **Status:** ${statusText}\n`;
                     }
                     discordMessage += `> **Funções:** ${inspector.roles.join(', ') || 'Nenhuma'}\n`;
-                    if(primaryRoleName) {
+                    if(primaryRoleName && primaryRoleObject?.hasDataFields !== false) {
+                        const primaryRoleData = inspector.roleData[primaryRoleName] || { performance: 0, notes: '', quantity: 0 };
                         discordMessage += `> **Desempenho (Primário):** ${primaryRoleData.performance}/10\n`;
-                        if (roleObject?.quantitative) {
+                        if (primaryRoleObject?.quantitative) {
                             discordMessage += `> **Quantidade (Primário):** ${primaryRoleData.quantity}\n`;
+                        }
+                        if (primaryRoleData.notes) {
+                            discordMessage += `> **Anotações (Primário):** ${primaryRoleData.notes}\n`;
                         }
                     }
                     const reportStatus = inspector.reports[weekIdentifier] ? '✅ Entregue' : '❌ Pendente';
                     discordMessage += `> **Relatório da Semana:** ${reportStatus}\n`;
-                    if (primaryRoleData.notes && primaryRoleName) {
-                         discordMessage += `> **Anotações (Primário):** ${primaryRoleData.notes}\n`;
-                    }
                     discordMessage += '\n';
                 });
             }
