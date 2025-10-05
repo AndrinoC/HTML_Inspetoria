@@ -189,12 +189,9 @@
         let currentWeek = new Date();
 
         const defaultRoles = [
-            // Funções base para arrastar
             { name: 'Fiscal de atestados', quantitative: false, hasDataFields: true },
             { name: 'Fiscal de prisão', quantitative: false, hasDataFields: true },
             { name: 'Instrutor de cursos', quantitative: true, hasDataFields: true },
-            
-            // Funções padrão dos inspetores (sem campos de dados)
             { name: 'Fiscal de conduta', quantitative: false, hasDataFields: false },
             { name: 'Auxiliar de prisão', quantitative: false, hasDataFields: false },
             { name: 'Recrutador', quantitative: true, hasDataFields: false }
@@ -248,9 +245,7 @@
                             roles = loadedData.roles;
                             renderAll();
                             alert('Dados carregados com sucesso!');
-                        } else {
-                            alert('Arquivo de backup inválido.');
-                        }
+                        } else { alert('Arquivo de backup inválido.'); }
                     } catch (error) {
                         alert('Erro ao ler ou processar o arquivo de backup.');
                         console.error(error);
@@ -359,28 +354,19 @@
                 const li = document.createElement('li');
                 li.dataset.inspectorId = inspector.id;
                 li.ondrop = drop; li.ondragover = allowDrop;
-                
                 const roleForEditing = inspector.activeRoleForEditing;
                 const roleForDataDisplay = isTemporaryView ? roleSortFilter : roleForEditing;
                 const roleObjectForData = roles.find(r => r.name === roleForDataDisplay);
-                
                 let liClasses = '';
                 if (isTemporaryView && !inspector.roleData[roleForDataDisplay]) liClasses += ' disabled-for-filter';
                 li.className = liClasses;
-                
                 const starClass = inspector.isFeatured ? 'featured' : '';
                 const tempRoleDisplayHTML = isTemporaryView ? `<span class="temp-role-display">(Visualizando Desempenho de: ${roleForDataDisplay})</span>` : '';
                 let detailsHTML = '', editRoleDropdownHTML = '';
-                
-                const editableRoles = inspector.roles.filter(roleName => {
-                    const roleObject = roles.find(r => r.name === roleName);
-                    return roleObject?.hasDataFields !== false;
-                });
-
+                const editableRoles = inspector.roles.filter(roleName => roles.find(r => r.name === roleName)?.hasDataFields !== false);
                 if (editableRoles.length > 0) {
                     const editOptions = editableRoles.map(r => `<option value="${r}" ${roleForEditing === r ? 'selected' : ''}>${r}</option>`).join('');
                     editRoleDropdownHTML = `<label>Editar Dados da Função:</label><select onchange="setActiveRoleForEditing(${inspector.id}, this.value)" ${isTemporaryView ? 'disabled' : ''}>${editOptions}</select>`;
-                    
                     if (roleForDataDisplay && roleObjectForData?.hasDataFields !== false) {
                         const currentRoleData = inspector.roleData[roleForDataDisplay] || { performance: 0, notes: '', quantity: 0 };
                         let quantitativeInputHTML = '';
@@ -391,7 +377,6 @@
                                      ${quantitativeInputHTML}<label>Anotações:</label><textarea oninput="updateInspectorRoleData(${inspector.id}, 'notes', this)">${currentRoleData.notes}</textarea>`;
                     }
                 }
-                
                 const rolesHTML = inspector.roles.map(role => `<span class="role-tag">${role} <span class="remove-role-btn" onclick="removeRoleFromInspector(${inspector.id}, '${role}')" title="Remover função">×</span></span>`).join('');
                 li.innerHTML = `<div class="list-item-content"><div class="inspector-header">
                              <span class="feature-star ${starClass}" onclick="toggleFeatured(${inspector.id})" title="Marcar como Destaque">★</span>
@@ -440,10 +425,7 @@
             if (!inspector) return;
             inspector.roles = inspector.roles.filter(r => r !== roleNameToRemove);
             if (inspector.activeRoleForEditing === roleNameToRemove) {
-                const newEditableRoles = inspector.roles.filter(roleName => {
-                    const roleObject = roles.find(r => r.name === roleName);
-                    return roleObject?.hasDataFields !== false;
-                });
+                const newEditableRoles = inspector.roles.filter(roleName => roles.find(r => r.name === roleName)?.hasDataFields !== false);
                 inspector.activeRoleForEditing = newEditableRoles[0] || null;
             }
             renderAll();
