@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Inspetores v15 (Funções Simplificadas)</title>
+    <title>Gerenciador de Inspetores v16 (UI Refinada)</title>
     <style>
         :root {
             --background-color: #2c2f33;
@@ -190,9 +190,9 @@
 
         const defaultRoles = [
             // Funções base para arrastar
-            { name: 'Fiscal de atestados', quantitative: false },
-            { name: 'Fiscal de prisão', quantitative: false },
-            { name: 'Instrutor de cursos', quantitative: true },
+            { name: 'Fiscal de atestados', quantitative: false, hasDataFields: true },
+            { name: 'Fiscal de prisão', quantitative: false, hasDataFields: true },
+            { name: 'Instrutor de cursos', quantitative: true, hasDataFields: true },
             
             // Funções padrão dos inspetores (sem campos de dados)
             { name: 'Fiscal de conduta', quantitative: false, hasDataFields: false },
@@ -284,7 +284,7 @@
                 initialRoleData[roleName] = { performance: 0, notes: '', quantity: 0 };
             });
             inspectors.push({
-                id: Date.now(), inspectorId, name, roles: defaultInspectorRoles, status: null, isFeatured: false, activeRoleForEditing: defaultInspectorRoles[0], roleData: initialRoleData, reports: {},
+                id: Date.now(), inspectorId, name, roles: defaultInspectorRoles, status: null, isFeatured: false, activeRoleForEditing: null, roleData: initialRoleData, reports: {},
             });
             nameInput.value = ''; idInput.value = '';
             renderAll();
@@ -359,18 +359,28 @@
                 const li = document.createElement('li');
                 li.dataset.inspectorId = inspector.id;
                 li.ondrop = drop; li.ondragover = allowDrop;
+                
                 const roleForEditing = inspector.activeRoleForEditing;
                 const roleForDataDisplay = isTemporaryView ? roleSortFilter : roleForEditing;
                 const roleObjectForData = roles.find(r => r.name === roleForDataDisplay);
+                
                 let liClasses = '';
                 if (isTemporaryView && !inspector.roleData[roleForDataDisplay]) liClasses += ' disabled-for-filter';
                 li.className = liClasses;
+                
                 const starClass = inspector.isFeatured ? 'featured' : '';
                 const tempRoleDisplayHTML = isTemporaryView ? `<span class="temp-role-display">(Visualizando Desempenho de: ${roleForDataDisplay})</span>` : '';
                 let detailsHTML = '', editRoleDropdownHTML = '';
-                if (inspector.roles.length > 0) {
-                    const editOptions = inspector.roles.map(r => `<option value="${r}" ${roleForEditing === r ? 'selected' : ''}>${r}</option>`).join('');
+                
+                const editableRoles = inspector.roles.filter(roleName => {
+                    const roleObject = roles.find(r => r.name === roleName);
+                    return roleObject?.hasDataFields !== false;
+                });
+
+                if (editableRoles.length > 0) {
+                    const editOptions = editableRoles.map(r => `<option value="${r}" ${roleForEditing === r ? 'selected' : ''}>${r}</option>`).join('');
                     editRoleDropdownHTML = `<label>Editar Dados da Função:</label><select onchange="setActiveRoleForEditing(${inspector.id}, this.value)" ${isTemporaryView ? 'disabled' : ''}>${editOptions}</select>`;
+                    
                     if (roleForDataDisplay && roleObjectForData?.hasDataFields !== false) {
                         const currentRoleData = inspector.roleData[roleForDataDisplay] || { performance: 0, notes: '', quantity: 0 };
                         let quantitativeInputHTML = '';
@@ -381,6 +391,7 @@
                                      ${quantitativeInputHTML}<label>Anotações:</label><textarea oninput="updateInspectorRoleData(${inspector.id}, 'notes', this)">${currentRoleData.notes}</textarea>`;
                     }
                 }
+                
                 const rolesHTML = inspector.roles.map(role => `<span class="role-tag">${role} <span class="remove-role-btn" onclick="removeRoleFromInspector(${inspector.id}, '${role}')" title="Remover função">×</span></span>`).join('');
                 li.innerHTML = `<div class="list-item-content"><div class="inspector-header">
                              <span class="feature-star ${starClass}" onclick="toggleFeatured(${inspector.id})" title="Marcar como Destaque">★</span>
@@ -414,7 +425,10 @@
             const inspector = inspectors.find(insp => insp.id === id);
             if (!inspector || inspector.roles.includes(newRoleName)) return;
             inspector.roles.push(newRoleName);
-            inspector.activeRoleForEditing = newRoleName;
+            const roleObject = roles.find(r => r.name === newRoleName);
+            if (roleObject?.hasDataFields !== false) {
+                inspector.activeRoleForEditing = newRoleName;
+            }
             if (!inspector.roleData[newRoleName]) {
                 inspector.roleData[newRoleName] = { performance: 0, notes: '', quantity: 0 };
             }
@@ -426,7 +440,11 @@
             if (!inspector) return;
             inspector.roles = inspector.roles.filter(r => r !== roleNameToRemove);
             if (inspector.activeRoleForEditing === roleNameToRemove) {
-                inspector.activeRoleForEditing = inspector.roles[0] || null;
+                const newEditableRoles = inspector.roles.filter(roleName => {
+                    const roleObject = roles.find(r => r.name === roleName);
+                    return roleObject?.hasDataFields !== false;
+                });
+                inspector.activeRoleForEditing = newEditableRoles[0] || null;
             }
             renderAll();
         }
@@ -447,7 +465,7 @@
             const roleNameInput = document.getElementById('role-name'), roleName = roleNameInput.value.trim();
             const isQuantitative = document.getElementById('role-quantitative').checked;
             if (roleName && !roles.some(r => r.name === roleName)) {
-                roles.push({ name: roleName, quantitative: isQuantitative });
+                roles.push({ name: roleName, quantitative: isQuantitative, hasDataFields: true });
                 roleNameInput.value = ''; document.getElementById('role-quantitative').checked = false;
                 renderAll();
             }
@@ -469,7 +487,6 @@
             roleList.innerHTML = ''; roleSortFilter.innerHTML = '<option value="all">Todas as Funções</option>';
             const defaultInspectorRoleNames = ['Fiscal de conduta', 'Auxiliar de prisão', 'Recrutador'];
             const draggableRoles = roles.filter(r => !defaultInspectorRoleNames.includes(r.name));
-            
             draggableRoles.forEach(role => {
                 const li = document.createElement('li'), quantText = role.quantitative ? ' (Quantitativa)' : '';
                 li.innerHTML = `<span class="list-item-content">${role.name}<em>${quantText}</em></span>`;
